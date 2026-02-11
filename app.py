@@ -12,18 +12,50 @@ st.set_page_config(page_title="TradePro Cloud", layout="wide", page_icon="🦅")
 
 st.markdown("""
 <style>
+    /* --- ESTILOS GENERALES --- */
     .stApp { background-color: #f5f7f9; color: #31333F; }
     [data-testid="stMetricValue"] { font-size: 1.5rem !important; color: #1f77b4; }
+    
+    /* --- BOTONES --- */
     div.stButton > button {
         background-color: #2E86C1; color: white; border-radius: 8px; font-weight: bold;
         border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
     }
-    div.stButton > button:hover { background-color: #1B4F72; color: white; }
+    div.stButton > button:hover { 
+        background-color: #1B4F72; color: white; transform: translateY(-2px);
+    }
+    
+    /* --- FORMULARIOS --- */
     [data-testid="stForm"] { background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    
+    /* --- FOOTER / FIRMA (FIXED) --- */
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: #ffffff;
+        color: #808080;
+        text-align: center;
+        padding: 10px;
+        font-size: 12px;
+        border-top: 1px solid #e0e0e0;
+        z-index: 999;
+    }
+    
+    /* Ajuste para que el footer no tape el contenido final */
+    .block-container {
+        padding-bottom: 70px;
+    }
 </style>
+
+<div class="footer">
+    <p>Developed by <b>William Ruiz</b> for all users | TradePro 🦅 | © 2026</p>
+</div>
 """, unsafe_allow_html=True)
 
-# Listas Maestras
+# --- LISTAS MAESTRAS ---
 LISTA_ACTIVOS = ["Boom 300", "Boom 500", "Boom 1000", "Crash 300", "Crash 500", "Crash 1000", "Volatility 75", "EURUSD", "XAUUSD", "US30", "BTCUSD"]
 LISTA_ESTRATEGIAS = ["Pullback", "Rompimiento", "Reversión", "Continuidad", "Smart Money", "Scalping", "Caza Spikes"]
 LISTA_EMOCIONES = ["🎯 Confiado", "😨 Miedo", "😡 Venganza", "🤩 Euforia", "😴 Aburrido", "😰 Ansioso"]
@@ -46,11 +78,13 @@ def init_connection():
 
 supabase = init_connection()
 
+# Gestión de Sesión
 if 'user' not in st.session_state:
     st.session_state.user = None
 if 'session' not in st.session_state:
     st.session_state.session = None
 
+# Restaurar sesión si existe (Fix Error 42501)
 if st.session_state.session is not None:
     try:
         supabase.auth.set_session(
@@ -167,11 +201,14 @@ def calcular_rr(entrada, sl, tp):
 # 4. FLUJO PRINCIPAL
 # ==============================================================================
 
+# --- PANTALLA DE LOGIN CENTRADA ---
 if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.title("🦅 TradePro Cloud")
-        st.markdown("##### Accede a tu terminal segura")
+        st.markdown("<br><br>", unsafe_allow_html=True) # Espacio vertical
+        st.markdown("<h1 style='text-align: center;'>🦅 TradePro Cloud</h1>", unsafe_allow_html=True)
+        st.markdown("<h5 style='text-align: center; color: gray;'>Accede a tu terminal segura</h5>", unsafe_allow_html=True)
+        st.markdown("---")
         
         tab_log, tab_reg = st.tabs(["🔑 Ingresar", "📝 Registrarse"])
         with tab_log:
@@ -188,7 +225,7 @@ if st.session_state.user is None:
                     register(new_email, new_pass)
     st.stop()
 
-# --- SIDEBAR & CAPITAL INICIAL ---
+# --- APP PRINCIPAL (SIDEBAR) ---
 with st.sidebar:
     st.success(f"🟢 {st.session_state.user.email}")
     if st.button("Cerrar Sesión", type="secondary"):
@@ -196,7 +233,6 @@ with st.sidebar:
     
     st.divider()
     st.header("💼 Configuración")
-    # --- NUEVO: CAPITAL INICIAL ---
     capital_inicial = st.number_input("Capital Inicial ($)", min_value=0.0, value=1000.0, step=100.0, help="Define con cuánto iniciaste para ver el balance real.")
 
     st.header("🔍 Filtros Globales")
@@ -274,9 +310,8 @@ with tab2:
         if f_activo: df_view = df_view[df_view["Activo"].isin(f_activo)]
         if f_estrat: df_view = df_view[df_view["Estrategia"].isin(f_estrat)]
         
-        # --- CÁLCULOS DE BALANCE ---
         pnl_total = df_view["Resultado_Neto"].sum()
-        balance_actual = capital_inicial + pnl_total # <--- NUEVO CÁLCULO
+        balance_actual = capital_inicial + pnl_total
         
         trades_total = len(df_view)
         wins = df_view[df_view["Resultado_Neto"] > 0]
@@ -284,13 +319,11 @@ with tab2:
         win_rate = (len(wins) / trades_total * 100) if trades_total > 0 else 0
         pf = (wins["Resultado_Neto"].sum() / abs(losses["Resultado_Neto"].sum())) if not losses.empty else 0
 
-        # --- MÉTRICAS SUPERIORES ---
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("💰 Balance Actual", f"${balance_actual:,.2f}", f"{pnl_total:,.2f} PnL") # <--- NUEVA MÉTRICA
+        k1.metric("💰 Balance Actual", f"${balance_actual:,.2f}", f"{pnl_total:,.2f} PnL")
         k2.metric("📊 Win Rate", f"{win_rate:.1f}%", f"{len(wins)}W - {len(losses)}L")
         k3.metric("⚖️ Profit Factor", f"{pf:.2f}")
         
-        # Drawdown básico
         df_sorted = df_view.sort_values("Fecha")
         df_sorted["CumPnL"] = df_sorted["Resultado_Neto"].cumsum()
         df_sorted["Equity"] = capital_inicial + df_sorted["CumPnL"]
@@ -301,40 +334,29 @@ with tab2:
 
         st.divider()
 
-        # --- GRÁFICOS NIVEL 1 ---
         g1, g2 = st.columns([2, 1])
         with g1:
-            # GRÁFICO DE EQUITY (CURVA DE CRECIMIENTO)
             fig_eq = px.line(df_sorted, x="Fecha", y="Equity", title="🚀 Curva de Crecimiento (Equity)", markers=True)
             fig_eq.add_hline(y=capital_inicial, line_dash="dash", line_color="gray", annotation_text="Capital Inicial")
             st.plotly_chart(fig_eq, use_container_width=True)
         
         with g2:
-            # GRÁFICO DE PSICOLOGÍA (NUEVO)
             fig_psy = px.pie(df_view, names="Emocion", title="🧠 Estado Psicológico", hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
             st.plotly_chart(fig_psy, use_container_width=True)
 
         st.divider()
         
-        # --- GRÁFICOS NIVEL 2 (HORA DORADA Y ACTIVOS) ---
         g3, g4 = st.columns(2)
-        
         with g3:
-            # GRÁFICO DE HORA DORADA (NUEVO)
-            # Extraemos la hora simple (0-23)
             df_view["Hora_Simple"] = pd.to_datetime(df_view["Hora"].astype(str)).dt.hour
             hourly_pnl = df_view.groupby("Hora_Simple")["Resultado_Neto"].sum().reset_index()
-            
             fig_hour = px.bar(hourly_pnl, x="Hora_Simple", y="Resultado_Neto", 
                               title="⏰ Tu Hora Dorada (PnL por Hora)", 
                               color="Resultado_Neto", 
-                              color_continuous_scale="RdBu",
-                              labels={"Hora_Simple": "Hora del Día (0-23)", "Resultado_Neto": "Ganancia/Pérdida"})
+                              color_continuous_scale="RdBu")
             st.plotly_chart(fig_hour, use_container_width=True)
-            
 
         with g4:
-            # GRÁFICO DE ACTIVOS (MEJORADO)
             asset_pnl = df_view.groupby("Activo")["Resultado_Neto"].sum().reset_index().sort_values("Resultado_Neto", ascending=False)
             fig_asset = px.bar(asset_pnl, x="Resultado_Neto", y="Activo", orientation='h', 
                                title="🏆 Rendimiento por Activo", 
