@@ -44,10 +44,7 @@ st.markdown("""
         z-index: 999;
     }
     
-    /* Ajuste para que el footer no tape el contenido final */
-    .block-container {
-        padding-bottom: 70px;
-    }
+    .block-container { padding-bottom: 70px; }
 </style>
 
 <div class="footer">
@@ -55,8 +52,8 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- LISTAS MAESTRAS ---
-LISTA_ACTIVOS = ["Boom 300", "Boom 500", "Boom 1000", "Crash 300", "Crash 500", "Crash 1000", "Volatility 75", "EURUSD", "XAUUSD", "US30", "BTCUSD"]
+# --- LISTAS MAESTRAS (Nomenclatura Bursátil) ---
+LISTA_ACTIVOS = ["XAUUSD (Oro)", "SPX500 (S&P 500)", "NDX100 (Nasdaq)"]
 LISTA_ESTRATEGIAS = ["Pullback", "Rompimiento", "Reversión", "Continuidad", "Smart Money", "Scalping", "Caza Spikes"]
 LISTA_EMOCIONES = ["🎯 Confiado", "😨 Miedo", "😡 Venganza", "🤩 Euforia", "😴 Aburrido", "😰 Ansioso"]
 LISTA_SESIONES = ["Londres", "Nueva York", "Asia", "Cierre Londres", "Pre-Mercado", "Indefinido"]
@@ -78,13 +75,9 @@ def init_connection():
 
 supabase = init_connection()
 
-# Gestión de Sesión
-if 'user' not in st.session_state:
-    st.session_state.user = None
-if 'session' not in st.session_state:
-    st.session_state.session = None
+if 'user' not in st.session_state: st.session_state.user = None
+if 'session' not in st.session_state: st.session_state.session = None
 
-# Restaurar sesión si existe (Fix Error 42501)
 if st.session_state.session is not None:
     try:
         supabase.auth.set_session(
@@ -138,10 +131,11 @@ def cargar_datos():
         if df.empty: return pd.DataFrame()
         
         rename_map = {
-            "fecha": "Fecha", "hora": "Hora", "activo": "Activo", "direccion": "Direccion",
-            "estrategia": "Estrategia", "origen": "Origen", "lotaje": "Lotaje",
-            "precio_entrada": "Precio_Entrada", "precio_salida": "Precio_Salida",
-            "resultado_neto": "Resultado_Neto", "resultado_bruto": "Resultado_Bruto",
+            "fecha": "Fecha", "hora_entrada": "Hora_Entrada", "hora_salida": "Hora_Salida", 
+            "activo": "Activo", "direccion": "Direccion", "estrategia": "Estrategia", 
+            "origen": "Origen", "lotaje": "Lotaje", "precio_entrada": "Precio_Entrada", 
+            "precio_salida": "Precio_Salida", "resultado_neto": "Resultado_Neto", 
+            "resultado_bruto": "Resultado_Bruto", "resultado_texto": "Resultado",
             "comision": "Comision", "swap": "Swap", "emocion": "Emocion", "sesion": "Sesion",
             "stop_loss": "Stop_Loss", "take_profit": "Take_Profit", "rr_planeado": "RR_Planeado"
         }
@@ -149,10 +143,8 @@ def cargar_datos():
         cols_existentes = {k: v for k, v in rename_map.items() if k in df.columns}
         df = df.rename(columns=cols_existentes)
         
-        if "Fecha" in df.columns:
-            df['Fecha'] = pd.to_datetime(df['Fecha']).dt.date
-        if "Resultado_Neto" in df.columns:
-            df['Resultado_Neto'] = pd.to_numeric(df['Resultado_Neto'], errors='coerce').fillna(0)
+        if "Fecha" in df.columns: df['Fecha'] = pd.to_datetime(df['Fecha']).dt.date
+        if "Resultado_Neto" in df.columns: df['Resultado_Neto'] = pd.to_numeric(df['Resultado_Neto'], errors='coerce').fillna(0)
             
         return df
     except Exception as e:
@@ -166,7 +158,8 @@ def guardar_registro(data):
         payload = {
             "user_id": st.session_state.user.id,
             "fecha": str(data["Fecha"]),
-            "hora": str(data["Hora"]),
+            "hora_entrada": str(data["Hora_Entrada"]),
+            "hora_salida": str(data["Hora_Salida"]),
             "activo": data["Activo"],
             "direccion": data["Direccion"],
             "estrategia": data["Estrategia"],
@@ -180,6 +173,7 @@ def guardar_registro(data):
             "swap": data["Swap"],
             "resultado_bruto": data["Resultado_Bruto"],
             "resultado_neto": data["Resultado_Neto"],
+            "resultado_texto": data["Resultado"],
             "rr_planeado": data["RR_Planeado"],
             "emocion": data["Emocion"],
             "sesion": data["Sesion"]
@@ -201,11 +195,10 @@ def calcular_rr(entrada, sl, tp):
 # 4. FLUJO PRINCIPAL
 # ==============================================================================
 
-# --- PANTALLA DE LOGIN CENTRADA ---
 if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown("<br><br>", unsafe_allow_html=True) # Espacio vertical
+        st.markdown("<br><br>", unsafe_allow_html=True) 
         st.markdown("<h1 style='text-align: center;'>🦅 TradePro Cloud</h1>", unsafe_allow_html=True)
         st.markdown("<h5 style='text-align: center; color: gray;'>Accede a tu terminal segura</h5>", unsafe_allow_html=True)
         st.markdown("---")
@@ -215,91 +208,97 @@ if st.session_state.user is None:
             with st.form("login_form"):
                 email = st.text_input("Email")
                 password = st.text_input("Contraseña", type="password")
-                if st.form_submit_button("Iniciar Sesión", use_container_width=True):
-                    login(email, password)
+                if st.form_submit_button("Iniciar Sesión", use_container_width=True): login(email, password)
         with tab_reg:
             with st.form("reg_form"):
                 new_email = st.text_input("Email")
                 new_pass = st.text_input("Contraseña", type="password")
-                if st.form_submit_button("Crear Cuenta", use_container_width=True):
-                    register(new_email, new_pass)
+                if st.form_submit_button("Crear Cuenta", use_container_width=True): register(new_email, new_pass)
     st.stop()
 
 # --- APP PRINCIPAL (SIDEBAR) ---
+df = cargar_datos()
+
 with st.sidebar:
     st.success(f"🟢 {st.session_state.user.email}")
-    if st.button("Cerrar Sesión", type="secondary"):
-        logout()
+    if st.button("Cerrar Sesión", type="secondary"): logout()
     
     st.divider()
     st.header("💼 Configuración")
-    capital_inicial = st.number_input("Capital Inicial ($)", min_value=0.0, value=1000.0, step=100.0, help="Define con cuánto iniciaste para ver el balance real.")
+    capital_inicial = st.number_input("Capital Inicial ($)", min_value=0.0, value=1000.0, step=100.0)
+    
+    pnl_historico = df["Resultado_Neto"].sum() if not df.empty else 0
+    balance_dinamico = capital_inicial + pnl_historico
+    st.metric("💰 Balance Dinámico", f"${balance_dinamico:,.2f}", f"{pnl_historico:,.2f} USD")
 
     st.header("🔍 Filtros Globales")
-    df = cargar_datos()
     f_activo, f_estrat = [], []
     if not df.empty:
         f_activo = st.multiselect("Activo", df["Activo"].unique())
         f_estrat = st.multiselect("Estrategia", df["Estrategia"].unique())
 
 st.title("🦅 Panel de Comando")
-
 tab1, tab2, tab3 = st.tabs(["📝 Registrar Operación", "📈 Master Dashboard", "🗃️ Bitácora Detallada"])
 
 # --- TAB 1: REGISTRO ---
 with tab1:
     with st.form("trade_form", clear_on_submit=True):
         st.subheader("Nuevo Trade")
-        c1, c2, c3, c4 = st.columns(4)
+        
+        c1, c2, c3, c4, c5 = st.columns(5)
         fecha = c1.date_input("Fecha", date.today())
-        hora = c2.time_input("Hora", datetime.now().time())
-        sesion = c3.selectbox("Sesión", LISTA_SESIONES)
-        emocion = c4.selectbox("Psicología", LISTA_EMOCIONES)
+        # FIX 1: step=60 para saltos de 1 minuto
+        hora_in = c2.time_input("Hora Entrada", datetime.now().time(), step=60)
+        hora_out = c3.time_input("Hora Salida", datetime.now().time(), step=60)
+        sesion = c4.selectbox("Sesión", LISTA_SESIONES)
+        emocion = c5.selectbox("Psicología", LISTA_EMOCIONES)
 
-        c5, c6, c7, c8 = st.columns(4)
-        activo = c5.selectbox("Activo", LISTA_ACTIVOS)
-        direccion = c6.selectbox("Dirección", ["BUY", "SELL", "BUY LIMIT", "SELL LIMIT"])
-        estrategia = c7.selectbox("Estrategia", LISTA_ESTRATEGIAS)
-        origen = c8.selectbox("Origen", LISTA_ORIGEN)
+        c6, c7, c8, c9 = st.columns(4)
+        activo = c6.selectbox("Activo", LISTA_ACTIVOS)
+        direccion = c7.selectbox("Dirección", ["BUY", "SELL", "BUY LIMIT", "SELL LIMIT"])
+        estrategia = c8.selectbox("Estrategia", LISTA_ESTRATEGIAS)
+        origen = c9.selectbox("Origen", LISTA_ORIGEN)
 
         st.markdown("---")
-        c9, c10, c11, c12 = st.columns(4)
-        precio_in = c9.number_input("Precio Entrada", format="%.5f")
-        sl = c10.number_input("Stop Loss", format="%.5f")
-        tp = c11.number_input("Take Profit", format="%.5f")
-        lotaje = c12.number_input("Lotaje", min_value=0.001, step=0.01, format="%.3f")
+        c10, c11, c12, c13 = st.columns(4)
+        precio_in = c10.number_input("Precio Entrada", format="%.5f")
+        sl = c11.number_input("Stop Loss", format="%.5f")
+        tp = c12.number_input("Take Profit", format="%.5f")
+        lotaje = c13.number_input("Lotaje", min_value=0.001, step=0.01, format="%.3f")
 
-        c13, c14, c15 = st.columns(3)
-        precio_out = c13.number_input("Precio Salida", format="%.5f")
-        comision = c14.number_input("Comisión ($)", min_value=0.0, step=0.1, format="%.2f")
-        swap = c15.number_input("Swap ($)", step=0.1, format="%.2f")
+        c14, c15, c16 = st.columns(3)
+        res_manual = c14.number_input("Valor Bruto Ganado/Perdido ($)", min_value=0.0, step=1.0, format="%.2f", help="Ingresa el valor siempre en positivo. El botón definirá si fue ganancia o pérdida.")
+        comision = c15.number_input("Comisión ($)", min_value=0.0, step=0.1, format="%.2f")
+        swap = c16.number_input("Swap ($)", step=0.1, format="%.2f")
         
         st.markdown("---")
-        res_previo = 0.0
-        if precio_out > 0:
-            diff = (precio_out - precio_in) if "BUY" in direccion else (precio_in - precio_out)
-            res_previo = diff * lotaje 
-            st.info(f"💡 Estimación Bruta: ${res_previo:.2f}")
+        st.markdown("<h5 style='text-align: center;'>Registrar Resultado de la Operación</h5>", unsafe_allow_html=True)
+        
+        col_btn1, col_btn2 = st.columns(2)
+        btn_ganada = col_btn1.form_submit_button("🟢 GANADA", use_container_width=True)
+        btn_perdida = col_btn2.form_submit_button("🔴 PERDIDA", use_container_width=True)
 
-        res_manual = st.number_input("Ganancia/Pérdida Bruta Real ($)", value=float(res_previo), step=1.0, format="%.2f")
-
-        if st.form_submit_button("🚀 EJECUTAR REGISTRO", type="primary", use_container_width=True):
-            neto = res_manual - comision + swap
+        if btn_ganada or btn_perdida:
+            estado_trade = "Ganada" if btn_ganada else "Perdida"
+            precio_out_auto = tp if btn_ganada else sl
+            resultado_bruto = res_manual if btn_ganada else -res_manual
+            
+            neto = resultado_bruto - comision + swap
             rr_calc = calcular_rr(precio_in, sl, tp)
             
             nuevo_trade = {
-                "Fecha": fecha, "Hora": hora, "Activo": activo, "Direccion": direccion,
-                "Estrategia": estrategia, "Origen": origen, "Lotaje": lotaje, 
-                "Precio_Entrada": precio_in, "Precio_Salida": precio_out,
-                "Stop_Loss": sl, "Take_Profit": tp, "RR_Planeado": rr_calc,
-                "Comision": comision, "Swap": swap,
-                "Resultado_Bruto": res_manual, "Resultado_Neto": neto,
-                "Emocion": emocion, "Sesion": sesion
+                "Fecha": fecha, "Hora_Entrada": hora_in, "Hora_Salida": hora_out,
+                "Activo": activo, "Direccion": direccion, "Estrategia": estrategia, 
+                "Origen": origen, "Lotaje": lotaje, "Precio_Entrada": precio_in, 
+                "Precio_Salida": precio_out_auto, "Stop_Loss": sl, "Take_Profit": tp, 
+                "RR_Planeado": rr_calc, "Comision": comision, "Swap": swap,
+                "Resultado_Bruto": resultado_bruto, "Resultado_Neto": neto, 
+                "Resultado": estado_trade, "Emocion": emocion, "Sesion": sesion
             }
             
             if guardar_registro(nuevo_trade):
                 if neto > 0: st.balloons()
-                st.success(f"✅ Registrado. Neto: ${neto:.2f}")
+                st.success(f"✅ Operación {estado_trade} registrada. Neto: ${neto:.2f}")
                 time.sleep(1)
                 st.rerun()
 
@@ -310,29 +309,31 @@ with tab2:
         if f_activo: df_view = df_view[df_view["Activo"].isin(f_activo)]
         if f_estrat: df_view = df_view[df_view["Estrategia"].isin(f_estrat)]
         
-        pnl_total = df_view["Resultado_Neto"].sum()
-        balance_actual = capital_inicial + pnl_total
+        pnl_total_dash = df_view["Resultado_Neto"].sum()
+        balance_actual = capital_inicial + pnl_total_dash
         
         trades_total = len(df_view)
         wins = df_view[df_view["Resultado_Neto"] > 0]
         losses = df_view[df_view["Resultado_Neto"] <= 0]
         win_rate = (len(wins) / trades_total * 100) if trades_total > 0 else 0
-        pf = (wins["Resultado_Neto"].sum() / abs(losses["Resultado_Neto"].sum())) if not losses.empty else 0
+        
+        ganancias_por_activo = df_view.groupby("Activo")["Resultado_Neto"].sum()
+        mejor_activo = ganancias_por_activo.idxmax() if not ganancias_por_activo.empty else "N/A"
+        peor_activo = ganancias_por_activo.idxmin() if not ganancias_por_activo.empty else "N/A"
 
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("💰 Balance Actual", f"${balance_actual:,.2f}", f"{pnl_total:,.2f} PnL")
+        k1.metric("💰 Balance Actual", f"${balance_actual:,.2f}", f"{pnl_total_dash:,.2f} PnL")
         k2.metric("📊 Win Rate", f"{win_rate:.1f}%", f"{len(wins)}W - {len(losses)}L")
-        k3.metric("⚖️ Profit Factor", f"{pf:.2f}")
         
-        df_sorted = df_view.sort_values("Fecha")
-        df_sorted["CumPnL"] = df_sorted["Resultado_Neto"].cumsum()
-        df_sorted["Equity"] = capital_inicial + df_sorted["CumPnL"]
-        df_sorted["Peak"] = df_sorted["Equity"].cummax()
-        df_sorted["DD"] = df_sorted["Equity"] - df_sorted["Peak"]
-        max_dd = df_sorted["DD"].min()
-        k4.metric("📉 Max Drawdown", f"${max_dd:,.2f}")
+        if mejor_activo != "N/A":
+            k3.metric(f"🏆 Mejor Activo ({mejor_activo})", f"${ganancias_por_activo.max():,.2f}")
+            k4.metric(f"🔻 Peor Activo ({peor_activo})", f"${ganancias_por_activo.min():,.2f}")
 
         st.divider()
+
+        df_sorted = df_view.sort_values(["Fecha", "Hora_Entrada"])
+        df_sorted["CumPnL"] = df_sorted["Resultado_Neto"].cumsum()
+        df_sorted["Equity"] = capital_inicial + df_sorted["CumPnL"]
 
         g1, g2 = st.columns([2, 1])
         with g1:
@@ -344,26 +345,6 @@ with tab2:
             fig_psy = px.pie(df_view, names="Emocion", title="🧠 Estado Psicológico", hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu)
             st.plotly_chart(fig_psy, use_container_width=True)
 
-        st.divider()
-        
-        g3, g4 = st.columns(2)
-        with g3:
-            df_view["Hora_Simple"] = pd.to_datetime(df_view["Hora"].astype(str)).dt.hour
-            hourly_pnl = df_view.groupby("Hora_Simple")["Resultado_Neto"].sum().reset_index()
-            fig_hour = px.bar(hourly_pnl, x="Hora_Simple", y="Resultado_Neto", 
-                              title="⏰ Tu Hora Dorada (PnL por Hora)", 
-                              color="Resultado_Neto", 
-                              color_continuous_scale="RdBu")
-            st.plotly_chart(fig_hour, use_container_width=True)
-
-        with g4:
-            asset_pnl = df_view.groupby("Activo")["Resultado_Neto"].sum().reset_index().sort_values("Resultado_Neto", ascending=False)
-            fig_asset = px.bar(asset_pnl, x="Resultado_Neto", y="Activo", orientation='h', 
-                               title="🏆 Rendimiento por Activo", 
-                               color="Resultado_Neto", 
-                               color_continuous_scale="RdBu")
-            st.plotly_chart(fig_asset, use_container_width=True)
-
     else:
         st.info("👋 Registra tu primer trade para desbloquear el Dashboard.")
 
@@ -374,15 +355,34 @@ with tab3:
         if f_activo: df_log = df_log[df_log["Activo"].isin(f_activo)]
         if f_estrat: df_log = df_log[df_log["Estrategia"].isin(f_estrat)]
 
-        cols_show = ["Fecha", "Hora", "Activo", "Direccion", "Estrategia", "Lotaje", "Precio_Entrada", "Precio_Salida", "Resultado_Neto", "Emocion"]
+        # Calculamos el Acumulado
+        df_log = df_log.sort_values(by=["Fecha"], ascending=True)
+        df_log["Acumulado"] = capital_inicial + df_log["Resultado_Neto"].cumsum()
+        
+        # Ordenamos de más reciente a más antiguo
+        df_log = df_log.sort_values(by=["Fecha"], ascending=False)
+        
+        # FIX 3: Limpiar milisegundos de las horas formateándolas a "HH:MM"
+        if "Hora_Entrada" in df_log.columns:
+            df_log["Hora_Entrada"] = pd.to_datetime(df_log["Hora_Entrada"], errors='coerce').dt.strftime('%H:%M')
+        if "Hora_Salida" in df_log.columns:
+            df_log["Hora_Salida"] = pd.to_datetime(df_log["Hora_Salida"], errors='coerce').dt.strftime('%H:%M')
+
+        cols_show = [
+            "Fecha", "Hora_Entrada", "Hora_Salida", "Activo", "Direccion", 
+            "Estrategia", "Lotaje", "Precio_Entrada", "Stop_Loss", "Take_Profit", 
+            "Comision", "Resultado", "Resultado_Neto", "Acumulado", "Emocion"
+        ]
+        
         cols_final = [c for c in cols_show if c in df_log.columns]
         
         st.dataframe(
-            df_log[cols_final].sort_values("Fecha", ascending=False),
+            df_log[cols_final],
             use_container_width=True,
             hide_index=True,
             column_config={
-                "Resultado_Neto": st.column_config.NumberColumn("PnL", format="$%.2f"),
+                "Resultado_Neto": st.column_config.NumberColumn("Valor Ganado/Perdido", format="$%.2f"),
+                "Acumulado": st.column_config.NumberColumn("Acumulado", format="$%.2f"),
                 "Fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
             }
         )
