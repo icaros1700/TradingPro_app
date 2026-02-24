@@ -52,7 +52,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- LISTAS MAESTRAS (Nomenclatura Bursátil) ---
+# --- LISTAS MAESTRAS ---
 LISTA_ACTIVOS = ["XAUUSD (Oro)", "SPX500 (S&P 500)", "NDX100 (Nasdaq)"]
 LISTA_ESTRATEGIAS = ["Pullback", "Rompimiento", "Reversión", "Continuidad", "Smart Money", "Scalping", "Caza Spikes"]
 LISTA_EMOCIONES = ["🎯 Confiado", "😨 Miedo", "😡 Venganza", "🤩 Euforia", "😴 Aburrido", "😰 Ansioso"]
@@ -247,7 +247,6 @@ with tab1:
         
         c1, c2, c3, c4, c5 = st.columns(5)
         fecha = c1.date_input("Fecha", date.today())
-        # FIX 1: step=60 para saltos de 1 minuto
         hora_in = c2.time_input("Hora Entrada", datetime.now().time(), step=60)
         hora_out = c3.time_input("Hora Salida", datetime.now().time(), step=60)
         sesion = c4.selectbox("Sesión", LISTA_SESIONES)
@@ -266,10 +265,10 @@ with tab1:
         tp = c12.number_input("Take Profit", format="%.5f")
         lotaje = c13.number_input("Lotaje", min_value=0.001, step=0.01, format="%.3f")
 
-        c14, c15, c16 = st.columns(3)
-        res_manual = c14.number_input("Valor Bruto Ganado/Perdido ($)", min_value=0.0, step=1.0, format="%.2f", help="Ingresa el valor siempre en positivo. El botón definirá si fue ganancia o pérdida.")
-        comision = c15.number_input("Comisión ($)", min_value=0.0, step=0.1, format="%.2f")
-        swap = c16.number_input("Swap ($)", step=0.1, format="%.2f")
+        # Casilla de multiplicador eliminada para una vista más limpia
+        c14, c15 = st.columns(2)
+        comision = c14.number_input("Comisión ($)", min_value=0.0, step=0.1, format="%.2f")
+        swap = c15.number_input("Swap ($)", step=0.1, format="%.2f")
         
         st.markdown("---")
         st.markdown("<h5 style='text-align: center;'>Registrar Resultado de la Operación</h5>", unsafe_allow_html=True)
@@ -281,9 +280,25 @@ with tab1:
         if btn_ganada or btn_perdida:
             estado_trade = "Ganada" if btn_ganada else "Perdida"
             precio_out_auto = tp if btn_ganada else sl
-            resultado_bruto = res_manual if btn_ganada else -res_manual
             
+            # MAGIA MATEMÁTICA: Calculamos la diferencia real de puntos
+            if "BUY" in direccion:
+                diff = precio_out_auto - precio_in
+            else: # Es un SELL
+                diff = precio_in - precio_out_auto
+            
+            # MULTIPLICADOR INVISIBLE: Determinado automáticamente por el activo seleccionado
+            if "XAUUSD" in activo:
+                multiplicador_oculto = 100
+            elif "SPX" in activo or "NDX" in activo:
+                multiplicador_oculto = 10
+            else:
+                multiplicador_oculto = 1
+                
+            # Calculamos el dinero exacto
+            resultado_bruto = diff * lotaje * multiplicador_oculto
             neto = resultado_bruto - comision + swap
+            
             rr_calc = calcular_rr(precio_in, sl, tp)
             
             nuevo_trade = {
@@ -298,8 +313,8 @@ with tab1:
             
             if guardar_registro(nuevo_trade):
                 if neto > 0: st.balloons()
-                st.success(f"✅ Operación {estado_trade} registrada. Neto: ${neto:.2f}")
-                time.sleep(1)
+                st.success(f"✅ Operación {estado_trade} registrada automáticamente. Neto: ${neto:.2f}")
+                time.sleep(2) 
                 st.rerun()
 
 # --- TAB 2: DASHBOARD ---
@@ -355,14 +370,11 @@ with tab3:
         if f_activo: df_log = df_log[df_log["Activo"].isin(f_activo)]
         if f_estrat: df_log = df_log[df_log["Estrategia"].isin(f_estrat)]
 
-        # Calculamos el Acumulado
         df_log = df_log.sort_values(by=["Fecha"], ascending=True)
         df_log["Acumulado"] = capital_inicial + df_log["Resultado_Neto"].cumsum()
         
-        # Ordenamos de más reciente a más antiguo
         df_log = df_log.sort_values(by=["Fecha"], ascending=False)
         
-        # FIX 3: Limpiar milisegundos de las horas formateándolas a "HH:MM"
         if "Hora_Entrada" in df_log.columns:
             df_log["Hora_Entrada"] = pd.to_datetime(df_log["Hora_Entrada"], errors='coerce').dt.strftime('%H:%M')
         if "Hora_Salida" in df_log.columns:
